@@ -80,7 +80,7 @@ If \(T_0>T_s\), then \(T'(t)<0\) and the object cools. If \(T_0<T_s\), then \(T'
 
 ## Project architecture
 
-The Streamlit interface makes HTTP requests to the independent FastAPI service. API schemas validate requests and responses, service functions connect routes to the mathematical engine, and the engine calculates time-series values with NumPy.
+The Streamlit interface validates inputs with the shared Pydantic request schemas and calls the NumPy mathematical engine directly. This lets the frontend run without a separate backend service. FastAPI remains an independent local API and uses the same service and mathematical-engine functions.
 
 ```text
 temperature_simulator/
@@ -121,9 +121,9 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3. Start the backend
+### 3. (Optional) Start the backend API
 
-In the first terminal:
+The Streamlit frontend does not require the API process. To run and test the standalone API locally, start it in a terminal:
 
 ```powershell
 uvicorn backend.main:app --reload
@@ -133,13 +133,15 @@ The API listens at `http://127.0.0.1:8000`. Interactive documentation is at `htt
 
 ### 4. Start the frontend
 
-In a second terminal:
+The frontend runs the shared math engine in-process, so start it directly:
 
 ```powershell
 streamlit run app.py
 ```
 
-Streamlit opens at `http://localhost:8501`. By default, the frontend connects to `http://127.0.0.1:8000`. Set `API_URL` to the backend base URL when it runs elsewhere. To permit additional browser origins, set `CORS_ORIGINS` to a comma-separated list; the default allows only localhost and 127.0.0.1 on port 8501.
+Streamlit opens at `http://localhost:8501`. The standalone API can be started independently when needed; its CORS configuration is controlled by `CORS_ORIGINS`.
+
+For Streamlit Community Cloud deployment, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## API endpoints
 

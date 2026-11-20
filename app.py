@@ -1,12 +1,14 @@
 """Streamlit dashboard for ThermoLab."""
 
-import os
 from copy import deepcopy
 
 import pandas as pd
 import plotly.graph_objects as go
-import requests
 import streamlit as st
+from pydantic import ValidationError
+
+from backend.math_engine import simulate
+from backend.schemas import CompareRequest, SimulationRequest
 
 
 st.set_page_config(
@@ -16,7 +18,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 TIME_UNITS = ("seconds", "minutes", "hours")
 TIME_TO_MINUTES = {"seconds": 1 / 60, "minutes": 1.0, "hours": 60.0}
 TIME_SINGULAR = {"seconds": "second", "minutes": "minute", "hours": "hour"}
@@ -125,32 +126,35 @@ st.markdown(
 )
 
 
-def api_post(endpoint: str, payload: dict) -> dict:
-    """Send a request to the API and turn transport/validation errors into useful messages."""
-    try:
-        response = requests.post(f"{API_URL}{endpoint}", json=payload, timeout=20)
-    except requests.RequestException as exc:
-        raise RuntimeError(
-            f"Could not reach the ThermoLab API at {API_URL}. "
-            "Start the backend and check API_URL."
-        ) from exc
+def _validation_message(error: ValidationError) -> str:
+    """Return concise field-specific details for invalid simulation input."""
+    return "; ".join(
+        f"{'.'.join(str(part) for part in item['loc'])}: {item['msg']}"
+        for item in error.errors()
+    )
 
-    if not response.ok:
-        try:
-            detail = response.json().get("detail", response.text)
-        except ValueError:
-            detail = response.text
-        if isinstance(detail, list):
-            detail = "; ".join(
-                f"{item.get('loc', ['input'])[-1]}: {item.get('msg', 'invalid value')}"
-                for item in detail
-            )
-        raise RuntimeError(f"API request failed ({response.status_code}): {detail}")
 
+def simulate_locally(payload: dict) -> dict:
+    """Validate a simulation request and run the shared mathematical engine."""
     try:
-        return response.json()
-    except ValueError as exc:
-        raise RuntimeError("The API returned an unreadable response.") from exc
+        request = SimulationRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise ValueError(_validation_message(exc)) from exc
+    return simulate(**request.model_dump())
+
+
+def compare_locally(payload: dict) -> dict:
+    """Validate a comparison request and calculate each case with the shared engine."""
+    try:
+        request = CompareRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise ValueError(_validation_message(exc)) from exc
+    return {
+        "results": [
+            simulate(**scenario.model_dump())
+            for scenario in request.scenarios
+        ]
+    }
 
 
 def reset_simulation() -> None:
@@ -582,11 +586,11 @@ def show_simulator() -> None:
     if run:
         try:
             with st.spinner("Calculating the temperature profile..."):
-                result = api_post("/simulate", selected_payload)
+                result = simulate_locally(selected_payload)
             st.session_state.result = result
             st.session_state.last_inputs = selected_payload
-        except RuntimeError as exc:
-            st.error(str(exc))
+        except ValueError as exc:
+            st.error(f"Invalid simulation input: {exc}")
 
     result = st.session_state.result
     status_inputs = st.session_state.last_inputs if result else selected_payload
@@ -793,13 +797,13 @@ def show_experiments() -> None:
         else:
             try:
                 with st.spinner("Comparing scenarios..."):
-                    response = api_post("/compare", {"scenarios": selected_payloads})
+                    response = compare_locally({"scenarios": selected_payloads})
                 st.session_state.comparison = {
                     "names": selected_names,
                     "results": response["results"],
                 }
-            except RuntimeError as exc:
-                st.error(str(exc))
+            except ValueError as exc:
+                st.error(f"Invalid comparison input: {exc}")
 
     comparison = st.session_state.comparison
     if comparison:
@@ -924,7 +928,7 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.markdown("---")
-    st.caption(f"API endpoint: `{API_URL}`")
+    st.caption("Calculations run locally in the app.")
 
 page = st.session_state.page
 if page == "Home":

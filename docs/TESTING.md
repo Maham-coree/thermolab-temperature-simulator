@@ -5,7 +5,7 @@
 
 ## Scope and method
 
-This record summarizes the automated test suite and the functional checks performed against the current application. Numerical values below were obtained from `backend.math_engine.simulate` and confirmed against the FastAPI `POST /simulate` response. Calculations use the model implemented in the project; the values are not measurements from a physical object.
+This record summarizes the automated test suite and the functional checks performed against the current application. Numerical values below were obtained from `backend.math_engine.simulate` and confirmed against the FastAPI `POST /simulate` response. The Streamlit frontend now calls that same engine directly after validating inputs with the shared Pydantic request schemas. Calculations use the model implemented in the project; the values are not measurements from a physical object.
 
 The test cases use 121 graph samples. Unless noted otherwise, time is in minutes and \(k\) is in \(\text{min}^{-1}\).
 
@@ -147,14 +147,14 @@ These are functional checks performed during review; they are not additional per
 | Area | Check performed | Result |
 |---|---|---|
 | Navigation | Rendered Home, Simulator, Mathematics, Experiments, and About using Streamlit AppTest | Pass |
-| Frontend/backend | Submitted a simulation through the Streamlit simulator using its configured API URL | Pass |
-| Cooling and heating | Checked both modes through the API and Streamlit simulator | Pass |
+| Frontend calculation path | Ran simulations in the Streamlit app through its in-process math-engine integration, without a FastAPI server | Pass |
+| Cooling, heating, and equilibrium | Verified the shared engine results through the API and the Streamlit simulator | Pass |
 | Graphs and metrics | Confirmed three Plotly charts and six result metrics appear after a run | Pass |
 | Data and CSV | Confirmed the simulation table and CSV download control are present; the generated download URL has a `.csv` suffix | Pass |
 | Comparison | Compared the three presets and a saved simulator run; the returned results and comparison chart rendered | Pass |
 | Reset | Reset simulator results and reset saved experiments/comparison | Pass |
 | API validation | A negative \(k\) request returned HTTP 422; root, health, simulation, and comparison requests returned successful responses | Pass |
-| Error handling | With an unavailable API URL, the simulator displayed an actionable connection error without an application exception | Pass |
+| Input validation | Invalid request values are rejected by the shared Pydantic request schemas; invalid API requests return HTTP 422 | Pass |
 | Responsive layout | Inspected the rendered page at desktop (1440 × 1000) and narrow (390 × 844) viewport sizes | Pass |
 
 ## Validation and units

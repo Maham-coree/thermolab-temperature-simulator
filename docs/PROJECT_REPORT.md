@@ -11,7 +11,7 @@
 
 ThermoLab is an interactive educational application for exploring how the temperature of an object changes when it is placed in surroundings at a different constant temperature. The project implements Newton's law of cooling and heating as an exponential function and presents the resulting temperature and rate profiles through an interactive web interface.
 
-The project connects the physical model to Real Analysis topics including exponential functions, limits, continuity, derivatives, and convergence of sampled sequences. A Streamlit frontend communicates with an independent FastAPI backend. NumPy performs the calculations, Plotly displays the graphs, and Pandas prepares the results table and CSV export. Tests verify the three required experiments, equilibrium, input validation, and the API behavior.
+The project connects the physical model to Real Analysis topics including exponential functions, limits, continuity, derivatives, and convergence of sampled sequences. The Streamlit frontend validates inputs and calls the shared NumPy mathematical engine directly, while an independent FastAPI application exposes the same engine for local API use. Plotly displays the graphs, and Pandas prepares the results table and CSV export. Tests verify the required experiments, equilibrium, input validation, and API behavior.
 
 ## 3. Introduction
 
@@ -134,29 +134,27 @@ The ratio \(e^{-k\Delta t}\) is between zero and one, so this is a convergent ge
 
 ## 10. System architecture
 
-ThermoLab keeps the presentation, API, and mathematical calculation in separate layers:
+ThermoLab shares its mathematical engine between two entry points: the Streamlit frontend and the standalone FastAPI API.
 
 ```text
 User
   │
   ▼
 Streamlit frontend (app.py)
-  │  HTTP requests through requests
-  ▼
-FastAPI routes (backend/main.py)
-  │  Pydantic request/response validation
-  ▼
-Application services (backend/services.py)
-  │
-  ▼
-NumPy mathematical engine (backend/math_engine.py)
-  │
-  └── JSON result returned to Streamlit
+  ├── Pydantic request validation (backend/schemas.py)
+  └── NumPy mathematical engine (backend/math_engine.py)
         ├── Plotly charts and metric cards
         └── Pandas table and CSV download
+
+API clients
+  │
+  ▼
+FastAPI routes (backend/main.py)
+  └── Services (backend/services.py)
+        └── Same mathematical engine (backend/math_engine.py)
 ```
 
-The API provides `GET /`, `GET /health`, `POST /simulate`, and `POST /compare`; interactive API documentation is available at `/docs`. The comparison endpoint accepts between two and ten scenarios. The frontend uses session state for the latest result and saved comparison scenarios. The application does not use a database.
+The frontend runs without a separate API process, which is suitable for Streamlit Community Cloud. The standalone API provides `GET /`, `GET /health`, `POST /simulate`, and `POST /compare`; interactive API documentation is available at `/docs`. Its comparison endpoint accepts between two and ten scenarios. The frontend uses session state for the latest result and saved comparison scenarios. The application does not use a database.
 
 ## 11. Technologies used
 
@@ -169,7 +167,6 @@ The project files use the following technologies:
 - **Pydantic** for API request and response validation.
 - **NumPy** for time samples and exponential calculations.
 - **Pandas** for simulation tables and CSV data.
-- **Requests** for frontend-to-backend HTTP communication.
 - **Pytest** and FastAPI's `TestClient` for automated tests.
 - **Custom CSS** and Streamlit theme configuration for the visual design.
 
@@ -187,7 +184,7 @@ The Streamlit app in `app.py` provides five navigation sections:
 - **Experiments:** presents the three required preset scenarios, accepts saved runs, and compares selected cases with a chart and summary table.
 - **About:** describes the educational purpose, technologies, assumptions, and limitations.
 
-The frontend reads the backend base URL from `API_URL`, defaulting to `http://127.0.0.1:8000`. Connection and API validation errors are presented to the user.
+For each run, the frontend validates input using `SimulationRequest` or `CompareRequest` from `backend/schemas.py`, then calls the shared `simulate` function from `backend/math_engine.py`. No network request or separately hosted backend is required by the frontend.
 
 ### Backend
 
@@ -197,9 +194,9 @@ The simulation accepts temperatures from absolute zero through 10,000 °C, \(0<k
 
 ## 13. Testing methodology
 
-Testing combines unit tests for the mathematical engine, API tests using FastAPI's `TestClient`, and functional checks of the Streamlit interface. The automated tests verify the three required cases against the analytical formula and derivative, equilibrium, heating/cooling direction, short-duration behavior, graph resolutions, invalid inputs, and API routes.
+Testing combines unit tests for the mathematical engine, API tests using FastAPI's `TestClient`, and functional checks of the Streamlit interface. The automated tests verify the three required cases against the analytical formula and derivative, equilibrium, heating/cooling direction, short-duration behavior, graph resolutions, invalid inputs, and API routes. Frontend calculations use those same validated requests and mathematical engine functions in-process.
 
-During the final review, the existing suite completed with **23 passing tests**. Additional Streamlit AppTest checks rendered all five sections and exercised simulation, charts, the CSV download control, resets, comparison, and backend-unavailable error handling. The required cases were also run directly through the engine and API. The full test record and exact outputs are in [`TESTING.md`](./TESTING.md).
+During the final review, the existing suite completed with **23 passing tests**. Streamlit AppTest checks rendered the interface and exercised the direct calculation path, charts, CSV download control, resets, and scenario comparison. The required cases were also run through the shared engine and API. The full test record and exact outputs are in [`TESTING.md`](./TESTING.md).
 
 ## 14. Three experimental results
 
@@ -233,7 +230,7 @@ The near-equilibrium case begins only 10 °C from the surroundings and uses a sm
 
 ## 17. Conclusion
 
-ThermoLab implements Newton's law as a functional simulator and uses it to demonstrate how exponential behavior connects to derivatives, continuity, limits, and convergence. The application distinguishes cooling, heating, and equilibrium, provides interactive graphs and scenario comparisons, and exposes the calculation through an independent API. Verification confirmed that the required outputs agree with the implemented equation and that the interface and API tests pass.
+ThermoLab implements Newton's law as a functional simulator and uses it to demonstrate how exponential behavior connects to derivatives, continuity, limits, and convergence. The application distinguishes cooling, heating, and equilibrium, provides interactive graphs and scenario comparisons, and calculates in-process with a shared mathematical engine. A separate FastAPI interface remains available for local API use. Verification confirmed that the required outputs agree with the implemented equation and that the interface and API tests pass.
 
 The model's simplicity makes the mathematical relationships clear, but it also limits its physical accuracy. Its results should be interpreted as an idealized educational demonstration rather than measurements or engineering predictions.
 
